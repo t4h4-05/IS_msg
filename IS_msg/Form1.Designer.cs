@@ -85,6 +85,7 @@
             txtMessageInput.Name = "txtMessageInput";
             txtMessageInput.Size = new Size(524, 25);
             txtMessageInput.TabIndex = 0;
+            txtMessageInput.KeyPress += txtMessageInput_KeyPress;
             // 
             // txtChatHistory
             // 
