@@ -11,11 +11,11 @@ namespace IS_msg
     public partial class Form1 : Form
     {
         const int UDP_PORT = 6000;
-        const int TCP_PORT = 5001;
 
         readonly UdpClient udpBroadcaster = new UdpClient();
-        readonly UdpClient udpListener = new UdpClient(UDP_PORT);
+        readonly UdpClient udpListener;
         TcpListener tcpListener;
+        int tcpPort;
 
         string myName;
         Dictionary<string, IPEndPoint> discoveredUsers = new Dictionary<string, IPEndPoint>();
@@ -25,36 +25,54 @@ namespace IS_msg
         public Form1()
         {
             InitializeComponent();
-            // wire-up send button if not done in designer
-            this.btnSend.Click += btnSend_Click;
+
+            // Allow multiple instances to bind UDP port 6000 on the same machine
+            udpListener = new UdpClient();
+            udpListener.Client.SetSocketOption(
+                SocketOptionLevel.Socket,
+                SocketOptionName.ReuseAddress,
+                true);
+            udpListener.Client.Bind(new IPEndPoint(IPAddress.Any, UDP_PORT));
+
+            // Wire up events
             this.Load += Form1_Load;
             this.FormClosing += Form1_FormClosing;
+            this.btnSend.Click += btnSend_Click;
         }
 
         private void Form1_Load(object sender, EventArgs e)
         {
-            // choose a display name
+            // Choose your display name
             myName = Environment.MachineName;
 
-            // Immediately announce our presence three times
+            // Start TCP listener on an ephemeral port
+            tcpListener = new TcpListener(IPAddress.Any, 0);
+            tcpListener.Server.SetSocketOption(
+                SocketOptionLevel.Socket,
+                SocketOptionName.ReuseAddress,
+                true);
+            tcpListener.Start();
+            tcpPort = ((IPEndPoint)tcpListener.LocalEndpoint).Port;
+
+            // Immediately announce our presence three times (with our port)
             SendHello();
             Thread.Sleep(100);
             SendHello();
             Thread.Sleep(100);
             SendHello();
 
-            // start background threads
+            // Start background loops
             new Thread(UdpBroadcastLoop) { IsBackground = true }.Start();
             new Thread(UdpListenLoop) { IsBackground = true }.Start();
             new Thread(TcpListenLoop) { IsBackground = true }.Start();
         }
 
         /// <summary>
-        /// Broadcasts a single HELLO packet announcing our presence.
+        /// Broadcasts a single HELLO packet announcing our name & port.
         /// </summary>
         private void SendHello()
         {
-            string hello = $"HELLO|{myName}";
+            string hello = $"HELLO|{myName}|{tcpPort}";
             byte[] data = Encoding.UTF8.GetBytes(hello);
             var ep = new IPEndPoint(IPAddress.Broadcast, UDP_PORT);
             udpBroadcaster.Send(data, data.Length, ep);
@@ -65,7 +83,7 @@ namespace IS_msg
             while (true)
             {
                 SendHello();
-                Thread.Sleep(3000);  // every 3 seconds
+                Thread.Sleep(3000); // every 3 seconds
             }
         }
 
@@ -78,13 +96,18 @@ namespace IS_msg
                 string msg = Encoding.UTF8.GetString(data);
                 string[] parts = msg.Split('|');
 
-                if (parts.Length == 2 && parts[0] == "HELLO" && parts[1] != myName)
+                // Expect: HELLO|TheirName|TheirPort
+                if (parts.Length == 3 && parts[0] == "HELLO" && parts[1] != myName)
                 {
                     string theirName = parts[1];
-                    if (!discoveredUsers.ContainsKey(theirName))
+                    if (int.TryParse(parts[2], out int theirPort))
                     {
-                        discoveredUsers[theirName] = remoteEP;
-                        this.Invoke((MethodInvoker)(() => AddUserButton(theirName)));
+                        var ep = new IPEndPoint(remoteEP.Address, theirPort);
+                        if (!discoveredUsers.ContainsKey(theirName))
+                        {
+                            discoveredUsers[theirName] = ep;
+                            this.Invoke((MethodInvoker)(() => AddUserButton(theirName)));
+                        }
                     }
                 }
             }
@@ -116,9 +139,6 @@ namespace IS_msg
 
         private void TcpListenLoop()
         {
-            tcpListener = new TcpListener(IPAddress.Any, TCP_PORT);
-            tcpListener.Start();
-
             while (true)
             {
                 using (var client = tcpListener.AcceptTcpClient())
@@ -128,11 +148,11 @@ namespace IS_msg
                     int len = ns.Read(buf, 0, buf.Length);
                     string msg = Encoding.UTF8.GetString(buf, 0, len);
 
+                    // Expect: MSG|SenderName|The text…
                     string[] parts = msg.Split(new[] { '|' }, 3);
                     if (parts.Length == 3 && parts[0] == "MSG")
                     {
-                        string sender = parts[1],
-                               text = parts[2];
+                        string sender = parts[1], text = parts[2];
                         string line = $"{sender}: {text}";
 
                         if (!chatHistory.ContainsKey(sender))
@@ -143,7 +163,7 @@ namespace IS_msg
                         {
                             if (currentChatUser == sender)
                                 txtChatHistory.AppendText(line + Environment.NewLine);
-                            // else you could highlight the sender’s button here
+                            // else you could visually flag the sender’s button
                         }));
                     }
                 }
@@ -154,7 +174,11 @@ namespace IS_msg
         {
             if (currentChatUser == null)
             {
-                MessageBox.Show("Select a user first!", "No User Selected", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show(
+                    "Select a user first!",
+                    "No User Selected",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning);
                 return;
             }
 
@@ -163,16 +187,16 @@ namespace IS_msg
 
             string full = $"MSG|{myName}|{text}";
             byte[] data = Encoding.UTF8.GetBytes(full);
-            var ep = discoveredUsers[currentChatUser];
 
+            var ep = discoveredUsers[currentChatUser];
             try
             {
-                using (var client = new TcpClient(ep.Address.ToString(), TCP_PORT))
+                using (var client = new TcpClient(ep.Address.ToString(), ep.Port))
                 {
                     client.GetStream().Write(data, 0, data.Length);
                 }
 
-                // update local chat history
+                // Append to our chat and clear input
                 string line = $"Me: {text}";
                 chatHistory[currentChatUser].Add(line);
                 txtChatHistory.AppendText(line + Environment.NewLine);
@@ -180,7 +204,11 @@ namespace IS_msg
             }
             catch (Exception ex)
             {
-                MessageBox.Show("Send failed: " + ex.Message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show(
+                    "Send failed: " + ex.Message,
+                    "Error",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Error);
             }
         }
 

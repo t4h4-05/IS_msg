@@ -106,6 +106,7 @@
             Controls.Add(panelUsers);
             Name = "Form1";
             Text = "Form1";
+            FormClosing += Form1_FormClosing;
             Load += Form1_Load;
             panelChatArea.ResumeLayout(false);
             panelChatArea.PerformLayout();
