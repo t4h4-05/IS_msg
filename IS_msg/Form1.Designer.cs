@@ -40,6 +40,7 @@
             // 
             // panelUsers
             // 
+            panelUsers.BackColor = Color.Silver;
             panelUsers.Dock = DockStyle.Left;
             panelUsers.Location = new Point(0, 0);
             panelUsers.Name = "panelUsers";
@@ -58,6 +59,7 @@
             // 
             // panelInput
             // 
+            panelInput.BackColor = Color.Gray;
             panelInput.Controls.Add(btnSend);
             panelInput.Controls.Add(txtMessageInput);
             panelInput.Dock = DockStyle.Bottom;
@@ -69,11 +71,12 @@
             // btnSend
             // 
             btnSend.Dock = DockStyle.Right;
+            btnSend.Font = new Font("Segoe UI Semibold", 12F, FontStyle.Bold, GraphicsUnit.Point, 0);
             btnSend.Location = new Point(530, 0);
             btnSend.Name = "btnSend";
             btnSend.Size = new Size(70, 40);
             btnSend.TabIndex = 1;
-            btnSend.Text = "Send";
+            btnSend.Text = "SEND";
             btnSend.UseVisualStyleBackColor = true;
             btnSend.Click += btnSend_Click;
             // 
@@ -85,10 +88,12 @@
             txtMessageInput.Name = "txtMessageInput";
             txtMessageInput.Size = new Size(524, 25);
             txtMessageInput.TabIndex = 0;
+            txtMessageInput.TextChanged += txtMessageInput_TextChanged;
             txtMessageInput.KeyPress += txtMessageInput_KeyPress;
             // 
             // txtChatHistory
             // 
+            txtChatHistory.BackColor = Color.FromArgb(224, 224, 224);
             txtChatHistory.Dock = DockStyle.Top;
             txtChatHistory.Location = new Point(0, 0);
             txtChatHistory.Multiline = true;
@@ -105,6 +110,7 @@
             ClientSize = new Size(800, 450);
             Controls.Add(panelChatArea);
             Controls.Add(panelUsers);
+            FormBorderStyle = FormBorderStyle.FixedToolWindow;
             Name = "Form1";
             Text = "Form1";
             FormClosing += Form1_FormClosing;

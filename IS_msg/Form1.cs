@@ -514,11 +514,16 @@ namespace IS_msg
 
         private void txtMessageInput_KeyPress(object sender, KeyPressEventArgs e)
         {
-            if(e.KeyChar == (char)Keys.Enter)
+            if (e.KeyChar == (char)Keys.Enter)
             {
                 e.Handled = true; // Prevent the beep sound
                 btnSend_Click(sender, e);
             }
+        }
+
+        private void txtMessageInput_TextChanged(object sender, EventArgs e)
+        {
+
         }
     }
 }
